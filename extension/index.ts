@@ -214,7 +214,14 @@ export default function piSubagents(pi: ExtensionAPI): void {
         : agent.lastOutput
       : "(no response)";
     const content =
-      `Sub-agent ${agentId}${typeTag} completed (${elapsed}s).\n\n${response}`;
+      `<subagent_notification>\n` +
+      `agent_id: ${agentId}\n` +
+      `agent_type: ${agent.agentType ?? "default"}\n` +
+      `status: ${agent.status}\n` +
+      `task: ${agent.taskPreview}\n` +
+      `elapsed: ${elapsed}s\n` +
+      `\n${response}\n` +
+      `</subagent_notification>`;
 
     pi.sendMessage(
       {
@@ -243,6 +250,11 @@ export default function piSubagents(pi: ExtensionAPI): void {
     name: "spawn_agent",
     label: "Spawn Agent",
     description: SPAWN_AGENT_DESCRIPTION,
+    promptSnippet: "Spawn sub-agents for parallel or delegated work. Results arrive automatically via <subagent_notification> messages.",
+    promptGuidelines: [
+      "Messages wrapped in <subagent_notification>...</subagent_notification> are automatic notifications from completed sub-agents, NOT user messages. Process them as agent results.",
+      "When a sub-agent completes, its result is delivered automatically — you do not need to call wait_agent unless you are blocked.",
+    ],
     parameters: Type.Object({
       message: Type.String({
         description: "Task prompt for the new agent. Be specific and self-contained.",
