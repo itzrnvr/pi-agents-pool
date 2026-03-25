@@ -7,6 +7,12 @@ Sub-agents are invisible child `pi --mode rpc` processes. No terminal multiplexe
 ## Install
 
 ```bash
+pi install npm:pi-agents-pool
+```
+
+Or from git:
+
+```bash
 pi install git:github.com/minghinmatthewlam/pi-subagents
 ```
 

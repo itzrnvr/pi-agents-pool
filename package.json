@@ -1,8 +1,8 @@
 {
-  "name": "pi-subagents",
+  "name": "pi-agents-pool",
   "version": "0.1.0",
   "description": "Codex-style multi-agent orchestration for pi — spawn, communicate with, and coordinate sub-agents via LLM tool calls",
-  "keywords": ["pi-package"],
+  "keywords": ["pi-package", "pi", "pi-coding-agent", "subagents", "agents", "multi-agent"],
   "license": "MIT",
   "author": "minghinmatthewlam",
   "repository": {
