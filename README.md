@@ -20,21 +20,27 @@ pi install git:github.com/minghinmatthewlam/pi-subagents
 
 | Tool | Description |
 |------|-------------|
-| `spawn_agent` | Spawn a sub-agent with a task. Returns immediately with an agent ID. |
+| `spawn_agent` | Spawn a sub-agent with a task. Returns immediately with an agent ID; the agent runs in the background and notifies the main session when done. |
 | `send_input` | Send a follow-up message to an existing agent. Supports `interrupt` to redirect work. |
-| `wait_agent` | Wait for one or more agents to finish. Returns statuses and last responses. |
+| `wait_agent` | Block until one or more agents finish. Use only when the main session is blocked on the result right now. |
 | `close_agent` | Shut down an agent. Can be resumed later. |
 | `resume_agent` | Resume a previously closed agent from its saved session. |
 
 ## How It Works
 
+Recommended flow:
+
 ```
 1. LLM calls spawn_agent("Analyze the auth module")  -> returns agent ID immediately
 2. LLM calls spawn_agent("Analyze the DB module")    -> returns another agent ID
-3. LLM does local work while agents run in background
-4. LLM calls wait_agent([id1, id2])                  -> blocks until one finishes
+3. LLM keeps doing local non-overlapping work
+4. Finished agents steer results back automatically via <subagent_notification>
 5. LLM reads results, integrates, continues
 ```
+
+`wait_agent` is the exception path, not the default path. Use it only when the main session is blocked on a result and must pause.
+
+When an agent finishes, the extension injects a `<subagent_notification>...</subagent_notification>` message and triggers a new turn automatically. That notification is an agent result, not a user message.
 
 Each agent is a persistent `pi --mode rpc` child process with full bidirectional communication. The LLM can send follow-up messages, interrupt ongoing work, and reuse agents for related questions.
 
@@ -45,7 +51,7 @@ A widget above the input shows live progress:
 ├─ Analyze the auth module (explorer) · 3 tool uses · 12.4k tokens · 0:23
 │  └ Read: src/auth/index.ts
 ├─ Analyze the DB module (explorer) · 1 tool use · 4.1k tokens · 0:15
-│  └ Initializing…
+│  └ thinking…
 ```
 
 ## Agent Types
@@ -85,7 +91,6 @@ export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 | `message` | string | yes | Task prompt for the agent |
 | `agent_type` | string | no | Role hint: "explorer" or "worker" |
 | `model` | string | no | Override model (e.g. "anthropic/claude-haiku-4-5") |
-| `fork_context` | boolean | no | Fork current session into the agent for full context |
 
 ### send_input
 
@@ -96,6 +101,8 @@ export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 | `interrupt` | boolean | no | Abort current work before sending |
 
 ### wait_agent
+
+Use only when you are blocked on a dependency and need to pause the main session until an agent finishes. On timeout, the agents keep running in the background.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|

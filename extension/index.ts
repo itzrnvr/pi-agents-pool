@@ -43,6 +43,12 @@ function formatTokens(tokens: number): string {
   return `${(tokens / 1000).toFixed(1)}k`;
 }
 
+function truncateSingleLine(value: string, max = 68): string {
+  const singleLine = value.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= max) return singleLine;
+  return singleLine.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
+}
+
 function renderAgentWidget(pool: AgentPool): string[] | undefined {
   const agents = pool.getAgents();
   if (agents.size === 0) return undefined;
@@ -57,7 +63,7 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
 
   const parts: string[] = [];
   if (running > 0) parts.push(`${running} running`);
-  if (idle > 0) parts.push(`${idle} idle`);
+  if (idle > 0) parts.push(`${idle} done`);
 
   const total = agents.size;
   const lines: string[] = [];
@@ -70,6 +76,7 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
     const branch = isLast ? "└─" : "├─";
     const continuation = isLast ? "   " : "│  ";
 
+    const taskPreview = truncateSingleLine(agent.taskPreview);
     const typeTag = agent.agentType ? ` (${agent.agentType})` : "";
     const toolInfo = `${agent.toolCount} tool use${agent.toolCount !== 1 ? "s" : ""}`;
     const tokenInfo = agent.tokenCount > 0 ? ` · ${formatTokens(agent.tokenCount)} tokens` : "";
@@ -83,19 +90,21 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
           : "";
 
     lines.push(
-      `${DIM}${branch}${RST} ${agent.taskPreview}${DIM}${typeTag}${RST} · ${toolInfo}${tokenInfo} · ${elapsed}${statusIcon ? ` ${statusIcon}` : ""}`,
+      `${DIM}${branch}${RST} ${taskPreview}${DIM}${typeTag}${RST} · ${toolInfo}${tokenInfo} · ${elapsed}${statusIcon ? ` ${statusIcon}` : ""}`,
     );
 
     // Activity sub-line
     const activity =
       agent.currentActivity ??
       (agent.status === "starting"
-        ? "Initializing…"
-        : agent.status === "idle"
-          ? "done"
-          : agent.status === "crashed"
-            ? agent.error ?? "crashed"
-            : undefined);
+        ? "starting…"
+        : agent.status === "streaming"
+          ? "thinking…"
+          : agent.status === "idle"
+            ? "done"
+            : agent.status === "crashed"
+              ? agent.error ?? "crashed"
+              : undefined);
 
     if (activity) {
       lines.push(`${DIM}${continuation}└ ${activity}${RST}`);
@@ -109,11 +118,11 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
 // Tool descriptions
 // ============================================================================
 
-const SPAWN_AGENT_DESCRIPTION = `Spawn a sub-agent for a well-scoped task. Returns the agent ID immediately — the agent runs in the background. When the agent finishes, its result is automatically delivered back to you as a notification. You can also use wait_agent to explicitly block, or send_input to send follow-ups.
+const SPAWN_AGENT_DESCRIPTION = `Spawn a sub-agent for a well-scoped task. Returns the agent ID immediately — the agent runs in the background. When the agent finishes, its result is automatically delivered back to you as a notification that steers the main session. Most of the time, spawn the agent and keep working locally instead of blocking on wait_agent.
 
 ### When to delegate vs. do locally
 - Plan first: identify critical-path blockers vs. sidecar tasks that can run in parallel.
-- Delegate bounded sidecar tasks that run in parallel with your local work. Prefer tasks that materially advance the goal without blocking your immediate next step.
+- Delegate bounded sidecar tasks that can run while you continue useful local work.
 - Do NOT delegate urgent blocking work when your very next action depends on the result.
 - Keep tightly-coupled or difficult work local.
 
@@ -124,9 +133,9 @@ const SPAWN_AGENT_DESCRIPTION = `Spawn a sub-agent for a well-scoped task. Retur
 
 ### After delegating
 - Continue doing meaningful non-overlapping work while agents run in the background.
-- Agent results will be delivered to you automatically when they finish — you do not need to call wait_agent for every agent.
-- Only call wait_agent when you need the result immediately for your next step and are blocked until it arrives.
-- Do not redo delegated work — integrate results when they arrive.
+- Completed agents will notify you automatically — you usually do not need to call wait_agent.
+- Only call wait_agent when you need a result immediately for the next step and are blocked until it arrives.
+- Do not redo delegated work — integrate results when they steer back.
 - Reuse existing agents via send_input for follow-up questions.
 
 ### Parallel patterns
@@ -138,9 +147,9 @@ const SEND_INPUT_DESCRIPTION =
   "Reuse agents for related follow-up questions instead of spawning new ones.";
 
 const WAIT_AGENT_DESCRIPTION =
-  "Wait until at least one of the specified agents finishes its current turn. " +
+  "Block the main session until at least one of the specified agents finishes its current turn. " +
   "Returns statuses and last response text for all requested agents. " +
-  "Call sparingly — only when you need the result for your next step and are blocked.";
+  "Use sparingly — completed agents already notify you automatically, so only call this when you are blocked on the result for your next step.";
 
 const CLOSE_AGENT_DESCRIPTION =
   "Shut down an agent. Closed agents can be resumed later with resume_agent.";
@@ -252,10 +261,11 @@ export default function piSubagents(pi: ExtensionAPI): void {
     name: "spawn_agent",
     label: "Spawn Agent",
     description: SPAWN_AGENT_DESCRIPTION,
-    promptSnippet: "Spawn sub-agents for parallel or delegated work. Results arrive automatically via <subagent_notification> messages.",
+    promptSnippet: "Spawn sub-agents for parallel or delegated work. Results steer back automatically via <subagent_notification> messages.",
     promptGuidelines: [
       "Messages wrapped in <subagent_notification>...</subagent_notification> are automatic notifications from completed sub-agents, NOT user messages. Process them as agent results.",
-      "When a sub-agent completes, its result is delivered automatically — you do not need to call wait_agent unless you are blocked.",
+      "When a sub-agent completes, its result is delivered automatically and triggers a new turn — you usually do not need wait_agent.",
+      "Prefer continuing local non-overlapping work while sub-agents run. Only call wait_agent when you are blocked on a dependency and must pause for the result.",
     ],
     parameters: Type.Object({
       message: Type.String({
@@ -272,12 +282,6 @@ export default function piSubagents(pi: ExtensionAPI): void {
       model: Type.Optional(
         Type.String({ description: "Override model for this agent (e.g. anthropic/claude-haiku-4-5)." }),
       ),
-      fork_context: Type.Optional(
-        Type.Boolean({
-          description:
-            "Fork the current session into the new agent so it starts with your full conversation context.",
-        }),
-      ),
     }),
 
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -285,7 +289,6 @@ export default function piSubagents(pi: ExtensionAPI): void {
         message: params.message,
         agentType: params.agent_type,
         model: params.model,
-        forkContext: params.fork_context,
       });
       ensureWidgetRefresh();
       return {
@@ -300,9 +303,8 @@ export default function piSubagents(pi: ExtensionAPI): void {
 
     renderCall(args, theme) {
       const type = args.agent_type ? theme.fg("dim", ` (${args.agent_type})`) : "";
-      const task = args.message
-        ? "\n" + theme.fg("dim", (args.message.split("\n").find((l: string) => l.trim()) || "").slice(0, 100))
-        : "";
+      const firstLine = args.message ? args.message.split("\n").find((l: string) => l.trim()) || "" : "";
+      const task = firstLine ? "\n" + theme.fg("dim", truncateSingleLine(firstLine, 80)) : "";
       return new Text(
         theme.fg("toolTitle", theme.bold("spawn_agent")) + type + task,
         0,
@@ -394,7 +396,9 @@ export default function piSubagents(pi: ExtensionAPI): void {
 
       // Build human-readable summary
       const lines: string[] = [];
-      if (result.timed_out) lines.push("Timed out waiting.");
+      if (result.timed_out) {
+        lines.push("No requested agents finished before timeout. They are still running in the background.");
+      }
       for (const [id, entry] of Object.entries(result.statuses)) {
         const status = entry.status;
         const preview = entry.last_response
@@ -433,7 +437,7 @@ export default function piSubagents(pi: ExtensionAPI): void {
         return new Text(
           theme.fg("success", "✓") +
             ` ${finished.length}/${entries.length} agents finished` +
-            timedOut,
+            (d.timed_out ? theme.fg("warning", " (still running)") : timedOut),
           0,
           0,
         );
@@ -448,7 +452,7 @@ export default function piSubagents(pi: ExtensionAPI): void {
           : "";
         lines.push(`${icon} ${theme.fg("accent", id)} ${theme.fg("dim", entry.status)}${response}`);
       }
-      if (d.timed_out) lines.push(theme.fg("warning", "Timed out"));
+      if (d.timed_out) lines.push(theme.fg("warning", "No agent finished before timeout; agents are still running."));
       return new Text(lines.join("\n"), 0, 0);
     },
   });

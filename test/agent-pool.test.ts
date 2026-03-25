@@ -9,6 +9,7 @@ import {
   MIN_WAIT_TIMEOUT_MS,
   MAX_WAIT_TIMEOUT_MS,
 } from "../extension/types.ts";
+import { AgentPool } from "../extension/agent-pool.ts";
 
 // ============================================================================
 // types.ts unit tests
@@ -88,5 +89,77 @@ describe("types", () => {
     it("MAX_WAIT_TIMEOUT_MS is 1h", () => {
       assert.equal(MAX_WAIT_TIMEOUT_MS, 3_600_000);
     });
+  });
+});
+
+describe("AgentPool", () => {
+  it("closeAgent removes crashed agents from the pool", async () => {
+    const pool = new AgentPool();
+    const internalPool = pool as unknown as {
+      agents: Map<string, {
+        id: string;
+        process: { exitCode: number; kill: (signal?: string) => void; on: (event: string, cb: () => void) => void };
+        status: "crashed";
+        sessionFile: string;
+        startTime: number;
+        lastOutput: string | null;
+        taskPreview: string;
+        toolCount: number;
+        tokenCount: number;
+        pendingRequests: Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void }>;
+        requestCounter: number;
+        idleResolvers: Set<() => void>;
+        error: string;
+      }>;
+      closedSessions: Map<string, string>;
+    };
+
+    const id = "deadbeef";
+    internalPool.agents.set(id, {
+      id,
+      process: {
+        exitCode: 1,
+        kill: () => {},
+        on: () => {},
+      },
+      status: "crashed",
+      sessionFile: "/tmp/deadbeef.jsonl",
+      startTime: Date.now(),
+      lastOutput: null,
+      taskPreview: "(crashed)",
+      toolCount: 0,
+      tokenCount: 0,
+      pendingRequests: new Map(),
+      requestCounter: 0,
+      idleResolvers: new Set(),
+      error: "boom",
+    });
+
+    const result = await pool.closeAgent(id);
+    assert.equal(result.previous_status, "crashed");
+    assert.equal(pool.getAgent(id), undefined);
+    assert.equal(internalPool.closedSessions.get(id), "/tmp/deadbeef.jsonl");
+  });
+
+  it("waitForAgents rejects empty ids", async () => {
+    const pool = new AgentPool();
+    await assert.rejects(
+      () => pool.waitForAgents({ ids: [] }),
+      (err: Error) => {
+        assert.ok(err.message.includes("non-empty"), `expected non-empty error, got: ${err.message}`);
+        return true;
+      },
+    );
+  });
+
+  it("waitForAgents rejects non-positive timeout", async () => {
+    const pool = new AgentPool();
+    await assert.rejects(
+      () => pool.waitForAgents({ ids: ["fake"], timeoutMs: 0 }),
+      (err: Error) => {
+        assert.ok(err.message.includes("greater than zero"), `expected timeout error, got: ${err.message}`);
+        return true;
+      },
+    );
   });
 });

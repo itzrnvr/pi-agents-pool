@@ -100,7 +100,6 @@ export interface SpawnOptions {
   message: string;
   agentType?: string;
   model?: string;
-  forkContext?: boolean;
 }
 
 export interface WaitOptions {
@@ -180,9 +179,6 @@ export class AgentPool {
     if (options.model) {
       piArgs.push("--model", options.model);
     }
-    if (options.forkContext && this.parentSessionFile) {
-      piArgs.push("--fork", this.parentSessionFile);
-    }
 
     const taskPreview = options.message.split("\n").find((l) => l.trim())?.slice(0, 100) || "(no task)";
 
@@ -196,7 +192,7 @@ export class AgentPool {
     writeRpcCommand(agent.process, { type: "prompt", message: options.message });
     this.notifyUpdate(id);
 
-    return { agent_id: id, session_file: sessionFile };
+    return { agent_id: id, session_file: agent.sessionFile };
   }
 
   // --------------------------------------------------------------------------
@@ -234,6 +230,11 @@ export class AgentPool {
 
   async waitForAgents(options: WaitOptions): Promise<WaitResult> {
     const { ids, signal } = options;
+
+    if (ids.length === 0) {
+      throw new Error("ids must be non-empty");
+    }
+
     const timeoutMs = clampTimeout(options.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS);
 
     // Validate all IDs exist
@@ -325,19 +326,22 @@ export class AgentPool {
   // --------------------------------------------------------------------------
 
   async closeAgent(id: string): Promise<{ previous_status: AgentStatus }> {
-    const agent = this.requireAgent(id);
+    const agent = this.agents.get(id);
+    if (!agent) {
+      throw new Error(`Agent ${id} not found`);
+    }
     const previousStatus = agent.status;
 
     // Preserve session file for resume
     this.closedSessions.set(id, agent.sessionFile);
 
-    // Stop the process
+    // Stop the process if it is still live
     await this.stopProcess(agent);
 
     agent.status = "closed";
     this.resolveWaiters(agent);
     this.agents.delete(id);
-    this.notifyUpdate(id);
+    this.notifyUpdate(id, agent);
 
     return { previous_status: previousStatus };
   }
@@ -434,8 +438,11 @@ export class AgentPool {
     proc.on("exit", (code) => {
       if (agent.status !== "closed") {
         if (code !== 0 && code !== null) {
+          const stderr = stderrBuf.trim();
           agent.status = "crashed";
-          agent.error = `Process exited with code ${code}`;
+          agent.error = stderr
+            ? `Process exited with code ${code}: ${stderr}`
+            : `Process exited with code ${code}`;
         } else {
           agent.status = "closed";
         }
@@ -540,8 +547,8 @@ export class AgentPool {
     agent.idleResolvers.clear();
   }
 
-  private notifyUpdate(agentId: string): void {
-    const agent = this.agents.get(agentId);
+  private notifyUpdate(agentId: string, agentOverride?: ManagedAgent): void {
+    const agent = agentOverride ?? this.agents.get(agentId);
     if (agent && this.onAgentUpdate) {
       this.onAgentUpdate(agentId, agent);
     }
@@ -650,7 +657,9 @@ export class AgentPool {
 // ============================================================================
 
 function clampTimeout(ms: number): number {
-  if (ms <= 0) return DEFAULT_WAIT_TIMEOUT_MS;
+  if (ms <= 0) {
+    throw new Error("timeout_ms must be greater than zero");
+  }
   return Math.max(MIN_WAIT_TIMEOUT_MS, Math.min(ms, MAX_WAIT_TIMEOUT_MS));
 }
 
