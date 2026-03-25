@@ -9,7 +9,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { AgentPool } from "./agent-pool.js";
+import { AgentPool } from "./agent-pool.ts";
 import {
   type AgentStatus,
   type SpawnAgentDetails,
@@ -22,7 +22,7 @@ import {
   MIN_WAIT_TIMEOUT_MS,
   MAX_WAIT_TIMEOUT_MS,
   DEFAULT_WAIT_TIMEOUT_MS,
-} from "./types.js";
+} from "./types.ts";
 
 // ============================================================================
 // Widget rendering
