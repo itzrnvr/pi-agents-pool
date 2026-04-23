@@ -99,7 +99,6 @@ function attachLineReader(
 export interface SpawnOptions {
   message: string;
   agentType?: string;
-  model?: string;
 }
 
 export interface WaitOptions {
@@ -126,10 +125,19 @@ export class AgentPool {
   private onAgentUpdate: AgentEventCallback | null = null;
   private onAgentComplete: AgentCompleteCallback | null = null;
   private maxAgents: number = DEFAULT_MAX_AGENTS;
+  private parentModel: string | null = null;
 
   setParentSession(sessionId: string, sessionFile: string | null): void {
     this.parentSessionId = sessionId;
     this.parentSessionFile = sessionFile;
+  }
+
+  setParentModel(model: { provider: string; id: string } | null): void {
+    if (!model) {
+      this.parentModel = null;
+      return;
+    }
+    this.parentModel = `${model.provider}/${model.id}`;
   }
 
   setOnAgentUpdate(cb: AgentEventCallback | null): void {
@@ -176,8 +184,12 @@ export class AgentPool {
     mkdirSync(dirname(sessionFile), { recursive: true });
 
     const piArgs = ["--mode", "rpc", "--session", sessionFile];
-    if (options.model) {
-      piArgs.push("--model", options.model);
+
+    // Model override priority: env var > parent session model > no override (pi default)
+    const envModel = process.env.PI_AGENTS_POOL_MODEL;
+    const effectiveModel = envModel ?? this.parentModel;
+    if (effectiveModel) {
+      piArgs.push("--model", effectiveModel);
     }
 
     const taskPreview = options.message.split("\n").find((l) => l.trim())?.slice(0, 100) || "(no task)";

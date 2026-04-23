@@ -86,6 +86,29 @@ export PI_SUBAGENT_MAX_DEPTH=3   # allow deeper nesting
 export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 ```
 
+## Model Selection
+
+Sub-agents inherit the model from the main session automatically. You do not need to (and cannot) specify a model per-agent.
+
+To override the model for all sub-agents, set the environment variable before starting pi:
+
+```bash
+export PI_AGENTS_POOL_MODEL=anthropic/claude-haiku-4-5
+pi
+```
+
+Or on Windows:
+
+```powershell
+$env:PI_AGENTS_POOL_MODEL="anthropic/claude-haiku-4-5"
+pi
+```
+
+Priority:
+1. `PI_AGENTS_POOL_MODEL` env var — highest priority
+2. Main session's current model — inherited automatically
+3. No override — sub-agent uses its own default
+
 ## Parameters
 
 ### spawn_agent
@@ -94,7 +117,6 @@ export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 |-------|------|----------|-------------|
 | `message` | string | yes | Task prompt for the agent |
 | `agent_type` | string | no | Role hint: "explorer" or "worker" |
-| `model` | string | no | Override model (e.g. "anthropic/claude-haiku-4-5") |
 
 ### send_input
 

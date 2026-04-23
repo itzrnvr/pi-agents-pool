@@ -178,6 +178,7 @@ export default function piSubagents(pi: ExtensionAPI): void {
     const sessionId = ctx.sessionManager.getSessionId();
     const sessionFile = ctx.sessionManager.getSessionFile();
     pool.setParentSession(sessionId, sessionFile);
+    pool.setParentModel(ctx.model);
   });
 
   pi.on("session_shutdown", () => {
@@ -279,16 +280,12 @@ export default function piSubagents(pi: ExtensionAPI): void {
             '"worker": implementation tasks — assign explicit file ownership, tell workers they are not alone in the codebase.',
         }),
       ),
-      model: Type.Optional(
-        Type.String({ description: "Override model for this agent (e.g. anthropic/claude-haiku-4-5)." }),
-      ),
     }),
 
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const result = await pool.spawnAgent({
         message: params.message,
         agentType: params.agent_type,
-        model: params.model,
       });
       ensureWidgetRefresh();
       return {
