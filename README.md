@@ -90,22 +90,21 @@ export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 
 Sub-agents inherit the model from the main session automatically. You do not need to (and cannot) specify a model per-agent.
 
-To override the model for all sub-agents, set the environment variable before starting pi:
+To override the model for all sub-agents, create a config file at one of these locations:
 
-```bash
-export PI_AGENTS_POOL_MODEL=anthropic/claude-haiku-4-5
-pi
-```
+- **Project-local:** `.pi/pi-agents-pool.json` in your project root
+- **Global:** `~/.pi/agent/pi-agents-pool.json`
 
-Or on Windows:
+Example config file:
 
-```powershell
-$env:PI_AGENTS_POOL_MODEL="anthropic/claude-haiku-4-5"
-pi
+```json
+{
+  "model": "anthropic/claude-haiku-4-5"
+}
 ```
 
 Priority:
-1. `PI_AGENTS_POOL_MODEL` env var — highest priority
+1. Config file `model` field — highest priority
 2. Main session's current model — inherited automatically
 3. No override — sub-agent uses its own default
 

@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
+import { loadConfig } from "./config.ts";
 import {
   type AgentStatus,
   type ManagedAgent,
@@ -185,9 +186,9 @@ export class AgentPool {
 
     const piArgs = ["--mode", "rpc", "--session", sessionFile];
 
-    // Model override priority: env var > parent session model > no override (pi default)
-    const envModel = process.env.PI_AGENTS_POOL_MODEL;
-    const effectiveModel = envModel ?? this.parentModel;
+    // Model override priority: config file > parent session model > no override (pi default)
+    const config = loadConfig();
+    const effectiveModel = config.model ?? this.parentModel;
     if (effectiveModel) {
       piArgs.push("--model", effectiveModel);
     }
