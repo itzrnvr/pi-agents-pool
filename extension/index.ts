@@ -81,7 +81,7 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
     // Build type+model tag: (explorer, claude-sonnet) or (claude-sonnet) or (explorer)
     const parts: string[] = [];
     if (agent.agentType) parts.push(agent.agentType);
-    if (agent.model) parts.push(agent.model.split("/").pop() || agent.model);
+    if (agent.model) parts.push(agent.model);
     const tag = parts.length > 0 ? ` (${parts.join(", ")})` : "";
 
     const toolInfo = `${agent.toolCount} tool use${agent.toolCount !== 1 ? "s" : ""}`;
