@@ -77,7 +77,13 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
     const continuation = isLast ? "   " : "│  ";
 
     const taskPreview = truncateSingleLine(agent.taskPreview);
-    const typeTag = agent.agentType ? ` (${agent.agentType})` : "";
+
+    // Build type+model tag: (explorer, claude-sonnet) or (claude-sonnet) or (explorer)
+    const parts: string[] = [];
+    if (agent.agentType) parts.push(agent.agentType);
+    if (agent.model) parts.push(agent.model.split("/").pop() || agent.model);
+    const tag = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+
     const toolInfo = `${agent.toolCount} tool use${agent.toolCount !== 1 ? "s" : ""}`;
     const tokenInfo = agent.tokenCount > 0 ? ` · ${formatTokens(agent.tokenCount)} tokens` : "";
     const elapsed = formatElapsed(agent.startTime);
@@ -90,7 +96,7 @@ function renderAgentWidget(pool: AgentPool): string[] | undefined {
           : "";
 
     lines.push(
-      `${DIM}${branch}${RST} ${taskPreview}${DIM}${typeTag}${RST} · ${toolInfo}${tokenInfo} · ${elapsed}${statusIcon ? ` ${statusIcon}` : ""}`,
+      `${DIM}${branch}${RST} ${taskPreview}${DIM}${tag}${RST} · ${toolInfo}${tokenInfo} · ${elapsed}${statusIcon ? ` ${statusIcon}` : ""}`,
     );
 
     // Activity sub-line

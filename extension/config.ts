@@ -3,8 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface PiAgentsPoolConfig {
-  /** Model to use for all sub-agents (e.g. "anthropic/claude-haiku-4-5") */
+  /** Default model for all sub-agents (e.g. "anthropic/claude-haiku-4-5") */
   model?: string;
+  /** Model for explorer agents. Falls back to `model` then parent session. */
+  explorerModel?: string;
+  /** Model for worker agents. Falls back to `model` then parent session. */
+  workerModel?: string;
 }
 
 const CONFIG_FILENAME = "pi-agents-pool.json";
@@ -19,6 +23,12 @@ function getConfigPaths(): string[] {
   ];
 }
 
+function validateStringField(value: unknown, name: string, path: string): asserts value is string | undefined {
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`Invalid config at ${path}: "${name}" must be a string`);
+  }
+}
+
 export function loadConfig(): PiAgentsPoolConfig {
   const paths = getConfigPaths();
 
@@ -29,10 +39,9 @@ export function loadConfig(): PiAgentsPoolConfig {
       const content = readFileSync(configPath, "utf-8");
       const parsed = JSON.parse(content) as PiAgentsPoolConfig;
 
-      // Validate: model must be a string if present
-      if (parsed.model !== undefined && typeof parsed.model !== "string") {
-        throw new Error(`Invalid config at ${configPath}: "model" must be a string`);
-      }
+      validateStringField(parsed.model, "model", configPath);
+      validateStringField(parsed.explorerModel, "explorerModel", configPath);
+      validateStringField(parsed.workerModel, "workerModel", configPath);
 
       return parsed;
     } catch (err) {

@@ -186,9 +186,18 @@ export class AgentPool {
 
     const piArgs = ["--mode", "rpc", "--session", sessionFile];
 
-    // Model override priority: config file > parent session model > no override (pi default)
+    // Model override priority: type-specific > config default > parent session model > pi default
     const config = loadConfig();
-    const effectiveModel = config.model ?? this.parentModel;
+    let effectiveModel: string | null = null;
+
+    if (options.agentType === "explorer" && config.explorerModel) {
+      effectiveModel = config.explorerModel;
+    } else if (options.agentType === "worker" && config.workerModel) {
+      effectiveModel = config.workerModel;
+    } else {
+      effectiveModel = config.model ?? this.parentModel;
+    }
+
     if (effectiveModel) {
       piArgs.push("--model", effectiveModel);
     }
@@ -198,6 +207,7 @@ export class AgentPool {
     const agent = await this.launchProcess(id, piArgs, sessionFile, {
       agentType: options.agentType,
       taskPreview,
+      model: effectiveModel ?? undefined,
     });
 
     // Send initial prompt
@@ -413,7 +423,7 @@ export class AgentPool {
     id: string,
     piArgs: string[],
     sessionFile: string,
-    options: { agentType?: string; taskPreview?: string },
+    options: { agentType?: string; taskPreview?: string; model?: string },
   ): Promise<ManagedAgent> {
     const env: Record<string, string> = {
       ...process.env as Record<string, string>,
@@ -431,6 +441,7 @@ export class AgentPool {
       process: proc,
       status: "starting",
       agentType: options.agentType,
+      model: options.model,
       sessionFile,
       startTime: Date.now(),
       lastOutput: null,

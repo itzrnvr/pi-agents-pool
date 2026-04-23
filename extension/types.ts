@@ -19,6 +19,7 @@ export interface ManagedAgent {
   process: ChildProcess;
   status: AgentStatus;
   agentType?: string;
+  model?: string;
   sessionFile: string;
   startTime: number;
   lastOutput: string | null;

@@ -90,12 +90,12 @@ export PI_SUBAGENT_MAX_DEPTH=1   # only one level of agents
 
 Sub-agents inherit the model from the main session automatically. You do not need to (and cannot) specify a model per-agent.
 
-To override the model for all sub-agents, create a config file at one of these locations:
+To override models, create a config file at one of these locations:
 
 - **Project-local:** `.pi/pi-agents-pool.json` in your project root
 - **Global:** `~/.pi/agent/pi-agents-pool.json`
 
-Example config file:
+### Default model for all agents
 
 ```json
 {
@@ -103,10 +103,33 @@ Example config file:
 }
 ```
 
+### Per-type models (recommended)
+
+Use different models for different agent roles:
+
+```json
+{
+  "explorerModel": "anthropic/claude-sonnet-4-5",
+  "workerModel": "openai/gpt-4o-mini"
+}
+```
+
+Or mix both — the per-type setting always wins:
+
+```json
+{
+  "model": "anthropic/claude-haiku-4-5",
+  "workerModel": "openai/gpt-4o"
+}
+```
+
+The active model is shown in the live widget: `Analyze auth (explorer, claude-sonnet)`
+
 Priority:
-1. Config file `model` field — highest priority
-2. Main session's current model — inherited automatically
-3. No override — sub-agent uses its own default
+1. Per-type model (`explorerModel` / `workerModel`) — highest priority
+2. Config file `model` field — default for all agents
+3. Main session's current model — inherited automatically
+4. No override — sub-agent uses its own default
 
 ## Parameters
 
